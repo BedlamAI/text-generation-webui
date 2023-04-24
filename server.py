@@ -46,6 +46,10 @@ from modules.LoRA import add_lora_to_model
 from modules.models import load_model, load_soft_prompt, unload_model
 from modules.text_generation import generate_reply, stop_everything_event
 
+# moderation imports
+import lancedb
+from sentence_transformers import SentenceTransformer
+
 
 def get_available_models():
     if shared.args.flexgen:
@@ -170,6 +174,15 @@ def load_prompt(fname):
             if text[-1] == '\n':
                 text = text[:-1]
             return text
+
+
+def connect_lancedb(vector_db_uri = "~/.lancedb",
+                   table_name = "jigsaw_old",
+                   transformer_model_name = "paraphrase-albert-small-v2"):
+    db = lancedb.connect(vector_db_uri)
+    lancedb_tbl = db.open_table(table_name)
+    transformer_model = SentenceTransformer(transformer_model_name)
+    return transformer_model, lancedb_tbl
 
 
 def download_model_wrapper(repo_id):
@@ -503,6 +516,16 @@ def create_interface():
     # Importing the extension files and executing their setup() functions
     if shared.args.extensions is not None and len(shared.args.extensions) > 0:
         extensions_module.load_extensions()
+
+    # Load models for moderation if moderation is true
+    if shared.args.moderation:
+        shared.moderation=True
+        shared.transformer_model, shared.lancedb_tbl = connect_lancedb(
+            vector_db_uri = shared.args.lancedb_uri,
+            table_name = shared.args.lancedb_table_name,
+            transformer_model_name = shared.args.transformer_model_name)
+    else:
+        shared.moderation=False
 
     with gr.Blocks(css=ui.css if not shared.is_chat() else ui.css + ui.chat_css, analytics_enabled=False, title=title, theme=ui.theme) as shared.gradio['interface']:
 
